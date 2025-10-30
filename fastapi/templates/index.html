@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>시니어 챗봇 콘텐츠</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <style>
+    :root{
+      --app-max: 420px;
+      --kakao: #FEE500;
+      --bg: #f5f6f7;
+      --text:#111; --muted:#777;
+      --radius:16px;
+      --bar-h:56px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:#fafafa;color:var(--text);font-family:-apple-system,system-ui,"Noto Sans KR",Roboto,Arial,sans-serif}
+    .shell{min-height:100dvh;display:grid;place-items:center;padding:16px}
+    .phone{width:100%;max-width:var(--app-max);min-height:min(100dvh - 32px, 900px);
+      background:#fff;border-radius:24px;overflow:hidden;
+      box-shadow:0 12px 30px rgba(0,0,0,.08);
+      display:grid;grid-template-rows:var(--bar-h) 1fr;}
+    .appbar{background:var(--kakao);display:flex;align-items:center;gap:10px;padding:0 14px;font-weight:700;border-bottom:1px solid rgba(0,0,0,.06)}
+    .dot{width:10px;height:10px;border-radius:50%;background:#111}
+
+    .view{display:none; height:100%; overflow:auto; background:var(--bg)}
+    .view.active{display:block}
+    .section{padding:14px}
+    .h{font-size:15px;font-weight:700;margin:6px 2px 10px}
+
+    .search{display:grid;grid-template-columns:1fr auto;gap:8px;padding:12px;background:#fff;border-bottom:1px solid #eee}
+    .search input{height:40px;padding:8px 12px;border:1px solid #ddd;border-radius:10px;outline:none}
+    .search button{height:40px;padding:0 14px;border:0;border-radius:10px;background:#111;color:#fff;font-weight:700;cursor:pointer}
+
+    .hscroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+    .card{background:#fff;border:1px solid #eee;border-radius:14px;min-width:240px;
+      padding:10px;cursor:pointer;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+    .card .title{font-size:14px;font-weight:600;line-height:1.35;margin-bottom:6px}
+    .card .sub{font-size:12px;color:var(--muted)}
+
+    .grid{display:grid;grid-template-columns:1fr;gap:10px}
+
+    .bar{display:flex;align-items:center;gap:8px;padding:10px;background:#fff;border-bottom:1px solid #eee}
+    .btn{height:36px;padding:0 12px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer}
+    .title-lg{font-weight:700;font-size:15px;line-height:1.3}
+    .summary{padding:12px}
+    .video {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%; /* 16:9 비율 유지 */
+    margin-top: 12px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    }
+    .video iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    }
+    .msg{display:flex;gap:8px;margin:8px 0;align-items:flex-end}
+    .bubble{background:#fff;border:1px solid #eee;border-radius:var(--radius);
+      padding:14px 16px;line-height:1.6;max-width:100%;white-space: pre-line;}
+    .empty{color:#999;text-align:center;padding:20px}
+    a.reset{color:#111;text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="phone">
+      <div class="appbar"><span class="dot"></span> 시니어 챗봇 콘텐츠</div>
+
+      <!-- 리스트 뷰 -->
+      <div id="listView" class="view active">
+        <form class="search" method="get" action="/">
+          <input type="text" name="q" value="{{ query }}" placeholder="제목으로 검색(예: 스마트폰, 연금…)" />
+          <button type="submit">검색</button>
+        </form>
+
+        <div class="section">
+          <div class="h">최근 업데이트(7일)</div>
+          {% if recent and recent|length > 0 %}
+          <div class="hscroll">
+            {% for r in recent %}
+            <div class="card" onclick="openDetail('{{ r.video_id }}','{{ r.title|e }}')">
+              <div class="title">{{ r.title }}</div>
+              <div class="sub">{{ r.upload_date }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty">최근 7일 내 업데이트된 영상이 없어요.</div>
+          {% endif %}
+        </div>
+
+        <div class="section">
+          <div class="h">영상 목록{% if query %} (검색: “{{ query }}”) {% endif %}</div>
+          {% if videos and videos|length > 0 %}
+          <div class="grid">
+            {% for v in videos %}
+            <div class="card" onclick="openDetail('{{ v.video_id }}','{{ v.title|e }}')">
+              <div class="title">{{ v.title }}</div>
+              <div class="sub">{{ v.upload_date }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty">검색 결과가 없어요. <a class="reset" href="/">초기화</a></div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- 디테일 뷰 -->
+      <div id="detailView" class="view">
+        <div class="bar">
+          <button class="btn" onclick="backToList()">← 목록</button>
+          <div>
+            <div id="dTitle" class="title-lg"></div>
+            <div id="dMeta" class="sub"></div>
+          </div>
+        </div>
+        <div id="summaryBox" class="summary">
+          <div class="empty">요약을 불러오는 중…</div>
+        </div>
+        <div id="videoBox" class="video"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const listView   = document.getElementById('listView');
+    const detailView = document.getElementById('detailView');
+    const dTitle     = document.getElementById('dTitle');
+    const dMeta      = document.getElementById('dMeta');
+    const summaryEl  = document.getElementById('summaryBox');
+
+    function toYouTubeEmbed(url){
+      if (!url) return '';
+      try {
+        const u = new URL(url);
+        let id = '';
+        if (u.hostname.includes('youtu.be')) {
+          id = u.pathname.slice(1);
+        } else {
+          id = u.searchParams.get('v') || '';
+        }
+        return id ? `https://www.youtube.com/embed/${id}` : '';
+      } catch {
+        return '';
+      }
+    }
+
+    function backToList(){
+      detailView.classList.remove('active');
+      listView.classList.add('active');
+      if (summaryEl) summaryEl.innerHTML = '';
+      history.replaceState({}, '', location.pathname);
+    }
+
+    async function openDetail(videoId, title){
+      listView.classList.remove('active');
+      detailView.classList.add('active');
+      dTitle.textContent = title || '';
+      dMeta.textContent  = '';
+      if (summaryEl) summaryEl.innerHTML = '<div class="empty">요약을 불러오는 중…</div>';
+
+      try{
+        const url = `/api/summary/${encodeURIComponent(videoId)}`;
+        console.log('[fetch]', url);
+
+        const res  = await fetch(url, { cache: 'no-store' });
+        console.log('[status]', res.status);
+
+        const raw  = await res.text();
+        console.log('[raw]', raw);
+
+        let data   = null;
+        try { data = JSON.parse(raw); } catch(e) {
+          console.error('[json parse error]', e);
+        }
+
+        if (!res.ok || !data || data.error || !data.summary_text) {
+          console.warn('[warn] no summary found', data);
+          if (summaryEl) summaryEl.innerHTML = '<div class="empty">요약이 없습니다.</div>';
+          return;
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'msg bot';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.textContent = data.summary_text;
+        wrap.appendChild(bubble);
+
+        summaryEl.innerHTML = '';
+        summaryEl.appendChild(wrap);
+
+        const videoBox = document.getElementById('videoBox');
+        if (videoBox) {
+          videoBox.innerHTML = ''; // 초기화
+          if (data.video_url) {
+            const embed = toYouTubeEmbed(data.video_url);
+            if (embed) videoBox.innerHTML = `<iframe src="${embed}" allowfullscreen></iframe>`;
+          }
+        }
+
+        const u = new URL(location.href);
+        u.searchParams.set('video', videoId);
+        history.replaceState({}, '', `${location.pathname}?${u.searchParams.toString()}`);
+
+        console.log('[render ok]', videoId);
+
+      }catch(e){
+        console.error('[fetch exception]', e);
+        summaryEl.innerHTML = '<div class="empty">요약 불러오는 중 오류가 발생했어요.</div>';
+      }
+    }
+
+    (function(){
+      const params = new URLSearchParams(location.search);
+      const vid = params.get('video');
+      if (vid){
+        openDetail(vid, '선택한 영상');
+      }
+    })();
+  </script>
+</body>
+</html>
