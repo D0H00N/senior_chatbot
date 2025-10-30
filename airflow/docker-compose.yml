@@ -1,0 +1,67 @@
+#version: "3.7"  # Docker Compose 파일 포맷 버전
+
+services:
+  mysql:
+    image: mysql:8.0                           # MySQL 8.0 공식 이미지 사용
+    container_name: mysql               # 컨테이너 이름 지정 (선택)
+    environment:
+      MYSQL_ROOT_PASSWORD: 1224      # 루트 계정 패스워드
+      MYSQL_DATABASE: senior_chatbot           # 초기 생성할 데이터베이스 이름
+      MYSQL_USER: senior                         # 애플리케이션에서 사용할 유저
+      MYSQL_PASSWORD: senior                 # 해당 유저의 패스워드
+      # 원격 접속을 허용하려면 아래도 추가
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "3307:3306"                            # 호스트 3307 ↔ 컨테이너 3306 매핑
+    volumes:
+      - mysql_data:/var/lib/mysql              # 데이터 영속화를 위한 볼륨
+
+  airflow-webserver:
+    build:
+      context: .                  
+      dockerfile: Dockerfile.airflow
+    #image: apache/airflow:2.7.1     
+    container_name: airflow_webserver
+    depends_on:
+      - mysql                                  # MySQL이 먼저 기동된 후 시작
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor   # 단일 노드 실행용 로컬 실행자
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >   # MySQL 연결 문자열 설정
+        mysql+mysqlconnector://senior:senior@
+        mysql:3306/senior_chatbot?charset=utf8mb4
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"    # 기본 예제 DAG 로딩 비활성화
+    ports:
+      - "8080:8080"                            # 호스트 8080 ↔ 컨테이너 8080 매핑
+    volumes:
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./dags:/opt/airflow/dags               # 호스트의 DAG 디렉토리 마운트 
+      - ./logs:/opt/airflow/logs               # 로그 디렉토리 마운트
+      - ./plugins:/opt/airflow/plugins         # 플러그인 디렉토리 마운트      
+    entrypoint: ["/entrypoint.sh"]
+    command: webserver                          # 이 컨테이너는 Webserver만 실행
+
+  airflow-scheduler:
+    build:
+      context: .                  
+      dockerfile: Dockerfile.airflow
+    #                   image: apache/airflow:2.7.1     
+    container_name: airflow_scheduler
+    depends_on:
+      - airflow-webserver                      # Webserver가 기동된 이후에 시작
+      - mysql
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >
+        mysql+mysqlconnector://senior:senior@
+        mysql:3306/senior_chatbot?charset=utf8mb4
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    volumes:
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./dags:/opt/airflow/dags     
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+    entrypoint: ["/entrypoint.sh"]
+    command: scheduler                          # 이 컨테이너는 Scheduler만 실행
+
+volumes:
+  mysql_data: {}                               # MySQL 데이터 전용 볼륨 정의

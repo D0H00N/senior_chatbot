@@ -1,0 +1,24 @@
+FROM apache/airflow:2.7.1
+
+USER root
+
+# 시스템 의존성 (ffmpeg 등) 설치
+RUN apt-get update \
+ && apt-get install -y ffmpeg \
+ && apt-get clean
+
+# 2) 파이썬 의존성 복사 
+COPY requirements.txt /requirements.txt
+
+# 3) 파이썬 패키지는 airflow 유저로
+USER airflow
+RUN pip install --no-cache-dir -r /requirements.txt
+
+# 4) 다시 root로 돌아와서 나머지 파일 복사
+USER root
+COPY ./dags    /opt/airflow/dags/
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# 5) 컨테이너가 실행될 때는 airflow 권한으로
+USER airflow
